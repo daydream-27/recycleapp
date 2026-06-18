@@ -1,0 +1,515 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>분리배출 가이드 — RecycleApp</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/base.css') }}" />
+  <script src="//dapi.kakao.com/v2/maps/sdk.js?appkey={{ kakao_key }}&libraries=services"></script>
+  <style>
+    nav {
+      position: sticky; top: 0; z-index: 100;
+      background: rgba(255,255,255,0.95); backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      padding: 0 2rem; height: 60px;
+      display: flex; align-items: center; justify-content: space-between;
+    }
+    .logo { display: flex; align-items: center; gap: 8px; }
+    .logo-icon {
+      width: 32px; height: 32px; border-radius: 8px;
+      background: linear-gradient(135deg, #2d7a3a, #00897b);
+      display: flex; align-items: center; justify-content: center;
+      font-size: 16px;
+    }
+    .logo-text { font-weight: 700; font-size: 18px; color: var(--green); }
+    .nav-links { display: flex; gap: 1.5rem; }
+    .nav-links a {
+      font-size: 14px; color: var(--text-sec);
+      transition: color 0.2s; font-weight: 500;
+    }
+    .nav-links a:hover { color: var(--green); }
+
+    .main { max-width: 1000px; margin: 0 auto; padding: 2rem; }
+
+    /* 탭 */
+    .tabs {
+      display: flex; gap: 8px; margin-bottom: 2rem;
+      background: rgba(0,0,0,0.04); padding: 4px;
+      border-radius: 12px; width: fit-content;
+    }
+    .tab-btn {
+      padding: 10px 24px; border-radius: 9px;
+      border: none; background: transparent;
+      font-size: 14px; font-weight: 500; color: var(--text-sec);
+      transition: all 0.2s; cursor: pointer;
+    }
+    .tab-btn.active {
+      background: #fff; color: var(--green);
+      box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+    }
+
+    /* 섹션 */
+    .section { display: none; }
+    .section.active { display: block; }
+
+    /* AI 분석 섹션 */
+    .analyze-card {
+      background: #fff; border-radius: 20px;
+      border: 1px solid var(--border);
+      padding: 2rem; margin-bottom: 1.5rem;
+    }
+    .analyze-card h2 { font-size: 1.3rem; font-weight: 700; margin-bottom: 0.5rem; color: var(--green); }
+    .analyze-card p { font-size: 14px; color: var(--text-sec); margin-bottom: 1.5rem; }
+
+    /* 업로드 영역 */
+    .upload-area {
+      border: 2px dashed rgba(45,122,58,0.3);
+      border-radius: 16px; padding: 3rem 2rem;
+      text-align: center; cursor: pointer;
+      transition: all 0.2s; background: var(--green-dim);
+      margin-bottom: 1rem;
+    }
+    .upload-area:hover { border-color: var(--green); background: rgba(45,122,58,0.15); }
+    .upload-area.dragover { border-color: var(--green); background: rgba(45,122,58,0.2); }
+    .upload-icon { font-size: 3rem; margin-bottom: 1rem; }
+    .upload-area h3 { font-size: 1rem; font-weight: 600; margin-bottom: 0.5rem; }
+    .upload-area p { font-size: 13px; color: var(--text-muted); }
+    #fileInput { display: none; }
+
+    .preview-img {
+      width: 100%; max-height: 300px; object-fit: contain;
+      border-radius: 12px; margin-bottom: 1rem;
+      display: none;
+    }
+
+    /* 텍스트 입력 */
+    .divider {
+      display: flex; align-items: center; gap: 1rem;
+      margin: 1rem 0; color: var(--text-muted); font-size: 13px;
+    }
+    .divider::before, .divider::after {
+      content: ''; flex: 1; height: 1px; background: var(--border);
+    }
+
+    .text-input-row { display: flex; gap: 8px; }
+    .text-input {
+      flex: 1; padding: 12px 16px; border-radius: 10px;
+      border: 1px solid var(--border); background: #f8faf8;
+      font-size: 14px; font-family: var(--font); outline: none;
+      transition: border-color 0.2s;
+    }
+    .text-input:focus { border-color: var(--green); }
+
+    .btn {
+      padding: 12px 24px; border-radius: 10px;
+      background: var(--green); border: none;
+      color: #fff; font-size: 14px; font-weight: 600;
+      transition: all 0.2s; white-space: nowrap;
+    }
+    .btn:hover { background: #236030; transform: translateY(-1px); }
+    .btn:disabled { opacity: 0.5; cursor: not-allowed; transform: none; }
+    .btn-outline {
+      background: transparent; border: 1px solid var(--green);
+      color: var(--green);
+    }
+    .btn-outline:hover { background: var(--green-dim); transform: none; }
+
+    /* 결과 */
+    .result-card {
+      display: none; padding: 1.5rem; border-radius: 16px;
+      background: linear-gradient(135deg, rgba(45,122,58,0.05), rgba(0,137,123,0.05));
+      border: 1px solid rgba(45,122,58,0.2); margin-top: 1.5rem;
+    }
+    .result-card.show { display: block; animation: fadeIn 0.3s ease; }
+    @keyframes fadeIn { from { opacity:0; transform:translateY(8px); } to { opacity:1; transform:none; } }
+    .result-title { font-size: 14px; font-weight: 700; color: var(--green); margin-bottom: 1rem; display: flex; align-items: center; gap: 6px; }
+    .result-content { font-size: 14px; line-height: 1.8; color: var(--text); white-space: pre-wrap; }
+    .result-content strong { color: var(--green); }
+
+    /* 로딩 */
+    .loading { display: none; text-align: center; padding: 2rem; color: var(--text-sec); font-size: 14px; }
+    .loading.show { display: block; }
+    .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid rgba(45,122,58,0.2); border-top-color: var(--green); border-radius: 50%; animation: spin 0.8s linear infinite; margin-right: 8px; vertical-align: middle; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* 지도 섹션 */
+    .map-controls {
+      background: #fff; border-radius: 16px;
+      border: 1px solid var(--border); padding: 1.25rem;
+      margin-bottom: 1rem; display: flex; gap: 8px; flex-wrap: wrap; align-items: center;
+    }
+    .map-controls input {
+      flex: 1; min-width: 200px; padding: 10px 14px; border-radius: 8px;
+      border: 1px solid var(--border); font-size: 14px; font-family: var(--font); outline: none;
+    }
+    .map-controls input:focus { border-color: var(--green); }
+
+    .filter-btns { display: flex; gap: 6px; flex-wrap: wrap; }
+    .filter-btn {
+      padding: 6px 14px; border-radius: 100px;
+      border: 1px solid var(--border); background: #fff;
+      font-size: 12px; font-weight: 500; color: var(--text-sec);
+      transition: all 0.2s; cursor: pointer;
+    }
+    .filter-btn.active { background: var(--green); border-color: var(--green); color: #fff; }
+
+    #map {
+      width: 100%; height: 500px; border-radius: 16px;
+      border: 1px solid var(--border); overflow: hidden;
+    }
+
+    .map-info {
+      margin-top: 1rem; padding: 1rem 1.25rem; border-radius: 12px;
+      background: #fff; border: 1px solid var(--border);
+      font-size: 13px; color: var(--text-sec);
+    }
+    .map-info strong { color: var(--text); }
+
+    footer {
+      border-top: 1px solid var(--border);
+      padding: 2rem; text-align: center;
+      color: var(--text-muted); font-size: 13px; margin-top: 3rem;
+    }
+  </style>
+</head>
+<body>
+
+<nav>
+  <div class="logo">
+    <div class="logo-icon">♻️</div>
+    <span class="logo-text">RecycleApp</span>
+  </div>
+  <div class="nav-links">
+    <a href="#" onclick="showTab('analyze')">AI 분리배출 분석</a>
+    <a href="#" onclick="showTab('map')">수거함 지도</a>
+  </div>
+</nav>
+
+<div class="main">
+
+  <!-- 탭 버튼 -->
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-analyze" onclick="showTab('analyze')">🤖 AI 분리배출 분석</button>
+    <button class="tab-btn" id="tab-map" onclick="showTab('map')">🗺️ 수거함 지도</button>
+  </div>
+
+  <!-- AI 분석 섹션 -->
+  <div class="section active" id="section-analyze">
+    <div class="analyze-card">
+      <h2>AI 분리배출 가이드</h2>
+      <p>사진을 업로드하거나 물건 이름을 입력하면 AI가 올바른 분리배출 방법을 알려드려요.</p>
+
+      <!-- 이미지 업로드 -->
+      <div class="upload-area" id="uploadArea" onclick="document.getElementById('fileInput').click()">
+        <div class="upload-icon">📸</div>
+        <h3>사진을 여기에 드래그하거나 클릭해서 업로드</h3>
+        <p>JPG, PNG, WEBP 파일 지원</p>
+      </div>
+      <input type="file" id="fileInput" accept="image/*" onchange="handleFileSelect(event)" />
+      <img id="previewImg" class="preview-img" alt="미리보기" />
+
+      <div style="display:flex; gap:8px; margin-bottom:0">
+        <button class="btn" id="analyzeImageBtn" style="display:none" onclick="analyzeImage()">📸 이 사진 분석하기</button>
+        <button class="btn btn-outline" id="clearBtn" style="display:none" onclick="clearImage()">✕ 지우기</button>
+      </div>
+
+      <div class="divider">또는 직접 입력</div>
+
+      <div class="text-input-row">
+        <input type="text" class="text-input" id="textInput" placeholder="예: 페트병, 우유팩, 스티로폼, 배터리..." onkeydown="if(event.key==='Enter') analyzeText()" />
+        <button class="btn" onclick="analyzeText()">분석하기</button>
+      </div>
+
+      <div class="loading" id="loading">
+        <span class="spinner"></span> AI가 분석하고 있어요...
+      </div>
+
+      <div class="result-card" id="resultCard">
+        <div class="result-title">✅ 분리배출 가이드</div>
+        <div class="result-content" id="resultContent"></div>
+      </div>
+    </div>
+
+    <!-- 자주 묻는 항목 -->
+    <div style="background:#fff; border-radius:16px; border:1px solid var(--border); padding:1.5rem">
+      <h3 style="font-size:15px; font-weight:600; margin-bottom:1rem; color:var(--green)">자주 묻는 항목</h3>
+      <div style="display:flex; gap:8px; flex-wrap:wrap">
+        {% for item in ['페트병', '우유팩', '스티로폼', '배터리', '형광등', '캔', '유리병', '비닐봉지', '종이컵', '택배박스'] %}
+        <button class="filter-btn" onclick="quickAnalyze('{{ item }}')">{{ item }}</button>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <!-- 지도 섹션 -->
+  <div class="section" id="section-map">
+    <div class="map-controls">
+      <input type="text" id="searchAddr" placeholder="주소 또는 장소 검색 (예: 강남구청)" onkeydown="if(event.key==='Enter') searchLocation()" />
+      <button class="btn" onclick="searchLocation()">검색</button>
+      <button class="btn btn-outline" onclick="getMyLocation()">📍 내 위치</button>
+    </div>
+
+    <div class="filter-btns" style="margin-bottom:1rem">
+      <button class="filter-btn active" onclick="setFilter('all', this)">전체</button>
+      <button class="filter-btn" onclick="setFilter('의류', this)">👕 의류 수거함</button>
+      <button class="filter-btn" onclick="setFilter('배터리', this)">🔋 폐배터리</button>
+      <button class="filter-btn" onclick="setFilter('종이팩', this)">🥛 종이팩</button>
+      <button class="filter-btn" onclick="setFilter('형광등', this)">💡 폐형광등</button>
+    </div>
+
+    <div id="map"></div>
+
+    <div class="map-info">
+      💡 <strong>수거함 위치 안내:</strong> 지도에서 마커를 클릭하면 수거함 상세 정보를 볼 수 있어요.
+      실제 수거함 위치는 지자체마다 다를 수 있으니 참고용으로만 활용해주세요.
+    </div>
+  </div>
+
+</div>
+
+<footer>
+  <p>♻️ RecycleApp — AI 기반 분리배출 가이드</p>
+  <p style="margin-top:4px">분리배출 기준은 환경부 지침을 따릅니다.</p>
+</footer>
+
+<script>
+  // 탭 전환
+  function showTab(tab) {
+    document.querySelectorAll('.section').forEach(s => s.classList.remove('active'));
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    document.getElementById(`section-${tab}`).classList.add('active');
+    document.getElementById(`tab-${tab}`).classList.add('active');
+    if (tab === 'map' && !mapInitialized) initMap();
+  }
+
+  // 이미지 처리
+  let selectedFile = null;
+
+  function handleFileSelect(e) {
+    selectedFile = e.target.files[0];
+    if (!selectedFile) return;
+    const reader = new FileReader();
+    reader.onload = (ev) => {
+      const img = document.getElementById('previewImg');
+      img.src = ev.target.result;
+      img.style.display = 'block';
+      document.getElementById('uploadArea').style.display = 'none';
+      document.getElementById('analyzeImageBtn').style.display = 'inline-block';
+      document.getElementById('clearBtn').style.display = 'inline-block';
+    };
+    reader.readAsDataURL(selectedFile);
+  }
+
+  // 드래그 앤 드롭
+  const uploadArea = document.getElementById('uploadArea');
+  uploadArea.addEventListener('dragover', e => { e.preventDefault(); uploadArea.classList.add('dragover'); });
+  uploadArea.addEventListener('dragleave', () => uploadArea.classList.remove('dragover'));
+  uploadArea.addEventListener('drop', e => {
+    e.preventDefault();
+    uploadArea.classList.remove('dragover');
+    const file = e.dataTransfer.files[0];
+    if (file && file.type.startsWith('image/')) {
+      selectedFile = file;
+      const reader = new FileReader();
+      reader.onload = ev => {
+        const img = document.getElementById('previewImg');
+        img.src = ev.target.result;
+        img.style.display = 'block';
+        uploadArea.style.display = 'none';
+        document.getElementById('analyzeImageBtn').style.display = 'inline-block';
+        document.getElementById('clearBtn').style.display = 'inline-block';
+      };
+      reader.readAsDataURL(file);
+    }
+  });
+
+  function clearImage() {
+    selectedFile = null;
+    document.getElementById('previewImg').style.display = 'none';
+    document.getElementById('uploadArea').style.display = 'block';
+    document.getElementById('analyzeImageBtn').style.display = 'none';
+    document.getElementById('clearBtn').style.display = 'none';
+    document.getElementById('fileInput').value = '';
+    document.getElementById('resultCard').classList.remove('show');
+  }
+
+  async function analyzeImage() {
+    if (!selectedFile) return;
+    showLoading(true);
+    const formData = new FormData();
+    formData.append('image', selectedFile);
+    try {
+      const res = await fetch('/analyze', { method: 'POST', body: formData });
+      const data = await res.json();
+      showLoading(false);
+      showResult(data.result);
+    } catch (e) {
+      showLoading(false);
+      showResult('오류가 발생했어요. 다시 시도해주세요.');
+    }
+}
+
+  async function analyzeText() {
+    const text = document.getElementById('textInput').value.trim();
+    if (!text) return;
+    showLoading(true);
+    const formData = new FormData();
+    formData.append('text', text);
+    try {
+      const res = await fetch('/analyze', { method: 'POST', body: formData });
+      const data = await res.json();
+      showLoading(false);
+      showResult(data.result);
+    } catch (e) {
+      showLoading(false);
+      showResult('오류가 발생했어요. 다시 시도해주세요.');
+    }
+}
+
+  function quickAnalyze(item) {
+    document.getElementById('textInput').value = item;
+    analyzeText();
+  }
+
+  function showLoading(show) {
+    document.getElementById('loading').classList.toggle('show', show);
+    document.getElementById('resultCard').classList.remove('show');
+  }
+
+  function showResult(text) {
+    // 마크다운 볼드 처리
+    const formatted = text.replace(/\*\*(.*?)\*\*/g, '<strong>$1</strong>');
+    document.getElementById('resultContent').innerHTML = formatted;
+    document.getElementById('resultCard').classList.add('show');
+    document.getElementById('resultCard').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  }
+
+  // 카카오맵
+  let map, ps, currentFilter = 'all', markers = [], mapInitialized = false;
+
+  // 수거함 샘플 데이터 (실제 서비스에서는 공공데이터 API 활용)
+const sampleLocations = [
+  { name: '의류 수거함 (대학9길 입구)', lat: 36.9987, lng: 127.2812, type: '의류', address: '경기 안성시 대덕면 대학9길 1' },
+  { name: '폐배터리 수거함 (대학9길 편의점)', lat: 36.9991, lng: 127.2819, type: '배터리', address: '경기 안성시 대덕면 대학9길 5' },
+  { name: '종이팩 수거함 (대학9길 버스정류장)', lat: 36.9983, lng: 127.2805, type: '종이팩', address: '경기 안성시 대덕면 대학9길 8' },
+  { name: '폐형광등 수거함 (대학9길 슈퍼)', lat: 36.9995, lng: 127.2826, type: '형광등', address: '경기 안성시 대덕면 대학9길 12' },
+  { name: '의류 수거함 (대학9길 삼거리)', lat: 36.9979, lng: 127.2798, type: '의류', address: '경기 안성시 대덕면 대학9길 15' },
+  { name: '폐배터리 수거함 (대학9길 주차장)', lat: 36.9999, lng: 127.2833, type: '배터리', address: '경기 안성시 대덕면 대학9길 18' },
+  { name: '종이팩 수거함 (대학9길 공원)', lat: 36.9975, lng: 127.2791, type: '종이팩', address: '경기 안성시 대덕면 대학9길 21' },
+  { name: '폐형광등 수거함 (대학9길 마을회관)', lat: 37.0003, lng: 127.2840, type: '형광등', address: '경기 안성시 대덕면 대학9길 24' },
+  { name: '의류 수거함 (대학9길 농협)', lat: 36.9971, lng: 127.2784, type: '의류', address: '경기 안성시 대덕면 대학9길 27' },
+  { name: '폐배터리 수거함 (대학9길 경로당)', lat: 37.0007, lng: 127.2847, type: '배터리', address: '경기 안성시 대덕면 대학9길 30' },
+  { name: '종이팩 수거함 (대학9길 우체국)', lat: 36.9967, lng: 127.2777, type: '종이팩', address: '경기 안성시 대덕면 대학9길 33' },
+  { name: '폐형광등 수거함 (대학9길 약국)', lat: 37.0011, lng: 127.2854, type: '형광등', address: '경기 안성시 대덕면 대학9길 36' },
+  { name: '의류 수거함 (대학9길 세탁소)', lat: 36.9963, lng: 127.2770, type: '의류', address: '경기 안성시 대덕면 대학9길 39' },
+  { name: '폐배터리 수거함 (대학9길 사거리)', lat: 37.0015, lng: 127.2861, type: '배터리', address: '경기 안성시 대덕면 대학9길 42' },
+  { name: '종이팩 수거함 (대학9길 끝)', lat: 36.9959, lng: 127.2763, type: '종이팩', address: '경기 안성시 대덕면 대학9길 45' },
+  { name: '폐형광등 수거함 (대학9길 근처 공터)', lat: 37.0019, lng: 127.2868, type: '형광등', address: '경기 안성시 대덕면 대학9길 48' },
+  { name: '의류 수거함 (대학9길 인근 주택가)', lat: 36.9955, lng: 127.2756, type: '의류', address: '경기 안성시 대덕면 대학9길 51' },
+  { name: '폐배터리 수거함 (대학9길 인근 상가)', lat: 37.0023, lng: 127.2875, type: '배터리', address: '경기 안성시 대덕면 대학9길 54' },
+  { name: '종이팩 수거함 (대학9길 인근 공원)', lat: 36.9951, lng: 127.2749, type: '종이팩', address: '경기 안성시 대덕면 대학9길 57' },
+  { name: '폐형광등 수거함 (대학9길 인근 학교)', lat: 37.0027, lng: 127.2882, type: '형광등', address: '경기 안성시 대덕면 대학9길 60' },
+];
+
+  const typeColors = {
+    '의류': '#4caf50',
+    '배터리': '#f44336',
+    '종이팩': '#2196f3',
+    '형광등': '#ff9800',
+  };
+
+  const typeEmoji = {
+    '의류': '👕',
+    '배터리': '🔋',
+    '종이팩': '🥛',
+    '형광등': '💡',
+  };
+
+  function initMap() {
+    const container = document.getElementById('map');
+    const options = { center: new kakao.maps.LatLng(37.5665, 126.9780), level: 8 };
+    map = new kakao.maps.Map(container, options);
+    ps = new kakao.maps.services.Places();
+    mapInitialized = true;
+    addMarkers(sampleLocations);
+    getMyLocation();
+  }
+
+  function addMarkers(locations) {
+    markers.forEach(m => m.setMap(null));
+    markers = [];
+
+    const filtered = currentFilter === 'all' ? locations : locations.filter(l => l.type === currentFilter);
+
+    filtered.forEach(loc => {
+      const position = new kakao.maps.LatLng(loc.lat, loc.lng);
+      const marker = new kakao.maps.Marker({ map, position });
+
+      const infoContent = `
+        <div style="padding:12px 14px; min-width:200px; font-family:-apple-system,'Malgun Gothic',sans-serif">
+          <div style="font-weight:700; margin-bottom:4px; color:#1a2e1a">
+            ${typeEmoji[loc.type] || '♻️'} ${loc.name}
+          </div>
+          <div style="font-size:12px; color:#4a6a4a; margin-bottom:6px">${loc.address}</div>
+          <span style="display:inline-block; padding:2px 8px; border-radius:100px; background:${typeColors[loc.type]}22; color:${typeColors[loc.type]}; font-size:11px; font-weight:600; border:1px solid ${typeColors[loc.type]}44">
+            ${loc.type} 수거함
+          </span>
+        </div>`;
+
+      const infowindow = new kakao.maps.InfoWindow({ content: infoContent });
+      kakao.maps.event.addListener(marker, 'click', () => {
+        markers.forEach(m => m._iw && m._iw.close());
+        infowindow.open(map, marker);
+        marker._iw = infowindow;
+      });
+
+      marker._iw = null;
+      markers.push(marker);
+    });
+  }
+
+  function setFilter(filter, btn) {
+    currentFilter = filter;
+    document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    if (mapInitialized) addMarkers(sampleLocations);
+  }
+
+  function searchLocation() {
+    const keyword = document.getElementById('searchAddr').value.trim();
+    if (!keyword || !mapInitialized) return;
+    ps.keywordSearch(keyword, (data, status) => {
+      if (status === kakao.maps.services.Status.OK) {
+        const lat = parseFloat(data[0].y);
+        const lng = parseFloat(data[0].x);
+        map.setCenter(new kakao.maps.LatLng(lat, lng));
+        map.setLevel(5);
+      } else {
+        alert('검색 결과가 없어요. 다른 검색어를 입력해보세요.');
+      }
+    });
+  }
+
+  function getMyLocation() {
+    if (!navigator.geolocation) return;
+    navigator.geolocation.getCurrentPosition(pos => {
+      if (!mapInitialized) return;
+      const lat = pos.coords.latitude;
+      const lng = pos.coords.longitude;
+      map.setCenter(new kakao.maps.LatLng(lat, lng));
+      map.setLevel(5);
+
+      // 내 위치 마커
+      new kakao.maps.Marker({
+        map,
+        position: new kakao.maps.LatLng(lat, lng),
+        image: new kakao.maps.MarkerImage(
+          'https://t1.daumcdn.net/localimg/localimages/07/mapapidoc/markerStar.png',
+          new kakao.maps.Size(24, 35)
+        )
+      });
+    });
+  }
+</script>
+</body>
+</html>
